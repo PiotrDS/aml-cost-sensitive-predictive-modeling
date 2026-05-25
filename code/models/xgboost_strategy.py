@@ -1,9 +1,9 @@
-import pandas as pd
-import numpy as np
-import xgboost as xgb
 import matplotlib.pyplot as plt
-from sklearn.model_selection import StratifiedKFold
+import numpy as np
+import pandas as pd
+import xgboost as xgb
 from core.metrics import calculate_profit
+from sklearn.model_selection import StratifiedKFold
 
 
 def run_xgboost(X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame):
@@ -51,7 +51,9 @@ def run_xgboost(X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame)
         current_profit = calculate_profit(y_train.values, oof_preds, num_variables=k)
         profit_ranking.append((k, current_profit))
 
-        print(f"Features: {k:2d} | Estimated Training Profit (CV): {current_profit:7.1f} EUR")
+        print(
+            f"Features: {k:2d} | Estimated Training Profit (CV): {current_profit:7.1f} EUR"
+        )
 
         if current_profit > best_profit:
             best_profit = current_profit
@@ -60,21 +62,28 @@ def run_xgboost(X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame)
     features, profits = zip(*profit_ranking)
 
     plt.figure(figsize=(10, 6))
-    plt.plot(features, profits, marker='o', linestyle='-', color='#1f77b4', linewidth=2)
-    plt.title('Profit Optimization Curve vs Number of Features')
-    plt.xlabel('Number of Selected Features (Top K)')
-    plt.ylabel('Estimated Validation Profit (EUR)')
-    plt.axvline(x=best_num_features, color='red', linestyle='--', label=f'Optimum ({best_num_features} features)')
-    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.plot(features, profits, marker="o", linestyle="-", color="#1f77b4", linewidth=2)
+    plt.title("Profit Optimization Curve vs Number of Features")
+    plt.xlabel("Number of Selected Features (Top K)")
+    plt.ylabel("Estimated Validation Profit (EUR)")
+    plt.axvline(
+        x=best_num_features,
+        color="red",
+        linestyle="--",
+        label=f"Optimum ({best_num_features} features)",
+    )
+    plt.grid(True, linestyle="--", alpha=0.7)
     plt.legend()
     plt.tight_layout()
-    plt.savefig('feature_optimization_profit.png', dpi=300)
+    plt.savefig("feature_optimization_profit.png", dpi=300)
     plt.close()
     print("Saved plot: feature_optimization_profit.png")
 
     top_features = importances.index[:best_num_features].tolist()
     print("-" * 46)
-    print(f"Optimal number of features: {best_num_features} (Expected Profit: {best_profit} EUR)")
+    print(
+        f"Optimal number of features: {best_num_features} (Expected Profit: {best_profit} EUR)"
+    )
     print(f"Selected features: {top_features}\n")
 
     model_reduced = xgb.XGBClassifier(**xgb_params)
@@ -88,6 +97,6 @@ def run_xgboost(X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame)
     best_clients_indices = best_probs_series.nlargest(1000).index.tolist()
 
     best_clients_1_based = [idx + 1 for idx in best_clients_indices]
-    used_features_idx = [int(var.replace('V', '')) for var in top_features]
+    used_features_idx = [int(var.replace("V", "")) for var in top_features]
 
     return best_clients_1_based, used_features_idx
