@@ -2,8 +2,9 @@ import argparse
 import os
 
 from core.data_loader import load_data
-from models.xgboost_strategy import run_xgboost
 from models.lasso_strategy import run_lasso
+from models.xgboost_strategy import run_xgboost
+
 # from models.stepwise_strategy import run_stepwise
 
 
@@ -26,10 +27,10 @@ def main():
     print(f"Class balance: {y_train.mean():.3f} positive rate\n")
 
     # ── Output directory:  submission/<model>/ ────────────────────────────
-    model_name = {"xgb": "xgboost", "lasso": "lasso", "stepwise": "stepwise"}[args.model]
-    output_dir = os.path.join(
-        os.path.dirname(__file__), "..", "submission", model_name
-    )
+    model_name = {"xgb": "xgboost", "lasso": "lasso", "stepwise": "stepwise"}[
+        args.model
+    ]
+    output_dir = os.path.join(os.path.dirname(__file__), "..", "submission", model_name)
     os.makedirs(output_dir, exist_ok=True)
 
     # ── Run chosen strategy ───────────────────────────────────────────────

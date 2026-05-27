@@ -84,7 +84,12 @@ def run_xgboost(
             best_profit = profit
             best_num_features = k
 
-    from core.plotting import plot_profit_optimization_curve, plot_feature_importance, plot_probability_distribution
+    from core.plotting import (
+        plot_feature_importance,
+        plot_probability_distribution,
+        plot_profit_optimization_curve,
+    )
+
     # ── Plot ───────────────────────────────────────────────────────────────
     features, profits = zip(*profit_ranking)
     plot_profit_optimization_curve(
@@ -94,23 +99,25 @@ def run_xgboost(
         title="Profit Optimization Curve vs Number of Features (top-K evaluation)",
         best_x=best_num_features,
         output_dir=output_dir,
-        filename="xgboost_profit_optimization.png"
+        filename="xgboost_profit_optimization.png",
     )
     print(f"Saved plot: {os.path.join(output_dir, 'xgboost_profit_optimization.png')}")
-    
+
     plot_feature_importance(
-        importances.index.tolist(), 
-        importances.values, 
-        "XGBoost Initial Feature Importance", 
-        output_dir, 
+        importances.index.tolist(),
+        importances.values,
+        "XGBoost Initial Feature Importance",
+        output_dir,
         "xgboost_feature_importance.png",
-        top_n=20
+        top_n=20,
     )
     print(f"Saved plot: {os.path.join(output_dir, 'xgboost_feature_importance.png')}")
 
     top_features = importances.index[:best_num_features].tolist()
     print("-" * 55)
-    print(f"  Optimal features : {best_num_features}  (CV profit: {best_profit:.1f} EUR)")
+    print(
+        f"  Optimal features : {best_num_features}  (CV profit: {best_profit:.1f} EUR)"
+    )
     print(f"  Selected features: {top_features}\n")
 
     # ── Step 3: OOF probs on selected features → find final K ─────────────
@@ -118,9 +125,9 @@ def run_xgboost(
     for tr_idx, val_idx in cv.split(X_train[top_features], y_train):
         m = xgb.XGBClassifier(**xgb_params)
         m.fit(X_train.iloc[tr_idx][top_features], y_train.iloc[tr_idx])
-        oof_probs_final[val_idx] = m.predict_proba(
-            X_train.iloc[val_idx][top_features]
-        )[:, 1]
+        oof_probs_final[val_idx] = m.predict_proba(X_train.iloc[val_idx][top_features])[
+            :, 1
+        ]
 
     final_cv_profit, final_k = _optimize_top_k(
         y_train.values, oof_probs_final, n_vars=best_num_features
@@ -130,11 +137,11 @@ def run_xgboost(
     print(f"  Final CV profit  : {final_cv_profit:.1f} EUR")
 
     plot_probability_distribution(
-        y_train.values, 
-        oof_probs_final, 
-        f"XGBoost OOF Probabilities (Final {best_num_features} Features)", 
-        output_dir, 
-        "xgboost_prob_distribution.png"
+        y_train.values,
+        oof_probs_final,
+        f"XGBoost OOF Probabilities (Final {best_num_features} Features)",
+        output_dir,
+        "xgboost_prob_distribution.png",
     )
     print(f"Saved plot: {os.path.join(output_dir, 'xgboost_prob_distribution.png')}")
 

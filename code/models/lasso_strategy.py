@@ -28,13 +28,14 @@ from sklearn.preprocessing import StandardScaler
 # -----------------------------------------------------------------------
 # Pre-screening hyperparameters
 # -----------------------------------------------------------------------
-N_OUTER_PRESCREEN = 200   # 500 -> 200 (coarse filter on full data)
-N_INNER_PRESCREEN = 70    # 200 -> 70 (inside each CV fold - no leakage)
+N_OUTER_PRESCREEN = 200  # 500 -> 200 (coarse filter on full data)
+N_INNER_PRESCREEN = 70  # 200 -> 70 (inside each CV fold - no leakage)
 
 
 # -----------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------
+
 
 def _make_model(C: float) -> LogisticRegression:
     """L1 logistic regression (elasticnet with l1_ratio=1) via saga solver."""
@@ -67,23 +68,21 @@ def _optimize_threshold(
     the prob of the last included and first excluded client.
     """
     sorted_idx = np.argsort(probs)[::-1]
-    sorted_y   = y_true[sorted_idx]
-    sorted_p   = probs[sorted_idx]
+    sorted_y = y_true[sorted_idx]
+    sorted_p = probs[sorted_idx]
 
     best_profit = -np.inf
     best_thresh = 0.5
-    best_k      = 1
+    best_k = 1
 
     cumulative_tp = np.cumsum(sorted_y == 1)
     cumulative_fp = np.cumsum(sorted_y == 0)
 
     for k in range(1, min(max_clients, len(probs)) + 1):
-        profit = (cumulative_tp[k - 1] * 10
-                  - cumulative_fp[k - 1] * 5
-                  - n_vars * 200)
+        profit = cumulative_tp[k - 1] * 10 - cumulative_fp[k - 1] * 5 - n_vars * 200
         if profit > best_profit:
             best_profit = profit
-            best_k      = k
+            best_k = k
             if k < len(sorted_p):
                 best_thresh = (sorted_p[k - 1] + sorted_p[k]) / 2
             else:
@@ -93,7 +92,7 @@ def _optimize_threshold(
 
 
 def _cv_profit_nested(
-    X_outer: np.ndarray,   # data after OUTER pre-screening (N x 200)
+    X_outer: np.ndarray,  # data after OUTER pre-screening (N x 200)
     y: np.ndarray,
     C: float,
     cv: StratifiedKFold,
@@ -118,18 +117,18 @@ def _cv_profit_nested(
 
         for train_idx, val_idx in cv.split(X_outer, y):
             X_tr, y_tr = X_outer[train_idx], y[train_idx]
-            X_val       = X_outer[val_idx]
+            X_val = X_outer[val_idx]
 
             # MI only on training data of this fold (no leakage)
             mi_fold = mutual_info_classif(X_tr, y_tr, random_state=42)
             inner_idx = np.argsort(mi_fold)[::-1][:n_inner]
 
-            X_tr_sel  = X_tr[:, inner_idx]
+            X_tr_sel = X_tr[:, inner_idx]
             X_val_sel = X_val[:, inner_idx]
 
             # Scale inside fold (train stats only)
             fold_scaler = StandardScaler()
-            X_tr_sel  = fold_scaler.fit_transform(X_tr_sel)
+            X_tr_sel = fold_scaler.fit_transform(X_tr_sel)
             X_val_sel = fold_scaler.transform(X_val_sel)
 
             model = _make_model(C)
@@ -191,6 +190,7 @@ def _cv_profit_final_features(
 # Main entry point
 # -----------------------------------------------------------------------
 
+
 def run_lasso(
     X_train: pd.DataFrame,
     y_train: pd.Series,
@@ -221,7 +221,7 @@ def run_lasso(
     outer_idx = np.argsort(mi_full)[::-1][:N_OUTER_PRESCREEN]
     outer_features = [col_names[i] for i in outer_idx]
 
-    X_outer      = X_train.values[:, outer_idx]   # (5000, 200)
+    X_outer = X_train.values[:, outer_idx]  # (5000, 200)
     X_test_outer = X_test.values[:, outer_idx]
 
     # ---------------------------------------------------------------- #
@@ -261,7 +261,7 @@ def run_lasso(
         drop=True
     )
 
-    best_C   = None
+    best_C = None
     best_row = None
 
     print("\nSelecting best C that produces >=1 feature on full training data...")
@@ -285,7 +285,7 @@ def run_lasso(
         )
 
         if n_nonzero > 0:
-            best_C   = candidate_C
+            best_C = candidate_C
             best_row = row
             print("  <-- selected")
             break
@@ -303,7 +303,12 @@ def run_lasso(
         f"| avg features in CV = {int(best_row['n_features'])}"
     )
 
-    from core.plotting import plot_lasso_sweep, plot_feature_importance, plot_probability_distribution
+    from core.plotting import (
+        plot_feature_importance,
+        plot_lasso_sweep,
+        plot_probability_distribution,
+    )
+
     # ── Plot ───────────────────────────────────────────────────────────────
     plot_lasso_sweep(
         c_values=df_valid["C"],
@@ -311,7 +316,7 @@ def run_lasso(
         features_count=df_valid["n_features"],
         best_c=best_C,
         output_dir=output_dir,
-        filename="lasso_regularization_sweep.png"
+        filename="lasso_regularization_sweep.png",
     )
     print(f"Saved: {os.path.join(output_dir, 'lasso_regularization_sweep.png')}")
 
@@ -332,7 +337,7 @@ def run_lasso(
 
     # Scale using full training data (final model only)
     scaler = StandardScaler()
-    X_inner      = scaler.fit_transform(X_outer[:, inner_idx_full])
+    X_inner = scaler.fit_transform(X_outer[:, inner_idx_full])
     X_test_inner = scaler.transform(X_test_outer[:, inner_idx_full])
 
     with warnings.catch_warnings():
@@ -340,9 +345,9 @@ def run_lasso(
         base_model = _make_model(best_C)
         base_model.fit(X_inner, y)
 
-    active_mask     = base_model.coef_[0] != 0
+    active_mask = base_model.coef_[0] != 0
     active_features = [f for f, m in zip(inner_features, active_mask) if m]
-    active_col_idx  = [i for i, m in enumerate(active_mask) if m]
+    active_col_idx = [i for i, m in enumerate(active_mask) if m]
 
     if not active_features:
         raise RuntimeError(
@@ -358,9 +363,9 @@ def run_lasso(
     # Greedy pruning: remove the feature whose removal improves profit most
     improved = True
     while improved and len(active_features) > 1:
-        improved  = False
+        improved = False
         best_pruned = base_profit
-        worst_idx   = None
+        worst_idx = None
 
         for i in range(len(active_features)):
             trial_cols = [c for j, c in enumerate(active_col_idx) if j != i]
@@ -369,7 +374,7 @@ def run_lasso(
             )
             if trial_profit > best_pruned:
                 best_pruned = trial_profit
-                worst_idx   = i
+                worst_idx = i
 
         if worst_idx is not None:
             removed = active_features.pop(worst_idx)
@@ -381,7 +386,9 @@ def run_lasso(
             )
             improved = True
 
-    print(f"\n-> After pruning: {len(active_features)} features, profit = {base_profit:.1f} EUR")
+    print(
+        f"\n-> After pruning: {len(active_features)} features, profit = {base_profit:.1f} EUR"
+    )
     print(f"   Features: {active_features}")
 
     # ---------------------------------------------------------------- #
@@ -389,11 +396,11 @@ def run_lasso(
     # ---------------------------------------------------------------- #
     print("\n[4/4] Training final model and predicting on test set...")
 
-    X_final      = X_inner[:, active_col_idx]
+    X_final = X_inner[:, active_col_idx]
     X_test_final = X_test_inner[:, active_col_idx]
 
     final_model = _make_model(best_C)
-    oof_probs   = np.zeros(len(y))
+    oof_probs = np.zeros(len(y))
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -402,7 +409,9 @@ def run_lasso(
             oof_probs[val_idx] = final_model.predict_proba(X_final[val_idx])[:, 1]
         final_model.fit(X_final, y)
 
-    final_thresh, final_cv_profit = _optimize_threshold(y, oof_probs, len(active_features))
+    final_thresh, final_cv_profit = _optimize_threshold(
+        y, oof_probs, len(active_features)
+    )
 
     # Derive optimal K from OOF probabilities
     final_k = int(np.sum(oof_probs > final_thresh))
@@ -418,7 +427,7 @@ def run_lasso(
         oof_probs,
         f"Lasso OOF Probabilities (Final {len(active_features)} Features)",
         output_dir,
-        "lasso_prob_distribution.png"
+        "lasso_prob_distribution.png",
     )
     print(f"Saved plot: {os.path.join(output_dir, 'lasso_prob_distribution.png')}")
 
@@ -428,7 +437,7 @@ def run_lasso(
         "Lasso Final Coefficients",
         output_dir,
         "lasso_feature_importance.png",
-        top_n=30
+        top_n=30,
     )
     print(f"Saved plot: {os.path.join(output_dir, 'lasso_feature_importance.png')}")
 
@@ -436,11 +445,11 @@ def run_lasso(
         warnings.simplefilter("ignore")
         test_probs = final_model.predict_proba(X_test_final)[:, 1]
 
-    n_select    = min(final_k, 1000)
+    n_select = min(final_k, 1000)
     top_indices = np.argsort(test_probs)[::-1][:n_select]
 
     best_clients_1_based = [int(idx) + 1 for idx in top_indices]
-    used_features_idx    = [int(var.replace("V", "")) for var in active_features]
+    used_features_idx = [int(var.replace("V", "")) for var in active_features]
 
     print(f"\n  Selected clients : {len(best_clients_1_based)}")
     print(f"  Used features    : {len(used_features_idx)}")

@@ -1,5 +1,6 @@
 import numpy as np
 
+
 # it's good as a helper function, but we should always test on max 1000 clients
 def calculate_profit(
     y_true: np.ndarray, y_pred: np.ndarray, num_variables: int
