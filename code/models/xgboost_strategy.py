@@ -84,27 +84,29 @@ def run_xgboost(
             best_profit = profit
             best_num_features = k
 
+    from core.plotting import plot_profit_optimization_curve, plot_feature_importance, plot_probability_distribution
     # ── Plot ───────────────────────────────────────────────────────────────
     features, profits = zip(*profit_ranking)
-    plt.figure(figsize=(10, 6))
-    plt.plot(features, profits, marker="o", linestyle="-", color="#1f77b4", linewidth=2)
-    plt.title("Profit Optimization Curve vs Number of Features (top-K evaluation)")
-    plt.xlabel("Number of Selected Features (Top K)")
-    plt.ylabel("Estimated OOF Profit (EUR)")
-    plt.axvline(
-        x=best_num_features,
-        color="red",
-        linestyle="--",
-        label=f"Optimum ({best_num_features} features)",
+    plot_profit_optimization_curve(
+        features,
+        profits,
+        x_label="Number of Selected Features (Top K)",
+        title="Profit Optimization Curve vs Number of Features (top-K evaluation)",
+        best_x=best_num_features,
+        output_dir=output_dir,
+        filename="xgboost_profit_optimization.png"
     )
-    plt.grid(True, linestyle="--", alpha=0.7)
-    plt.legend()
-    plt.tight_layout()
-
-    plot_path = os.path.join(output_dir, "feature_optimization_profit.png")
-    plt.savefig(plot_path, dpi=300)
-    plt.close()
-    print(f"Saved plot: {plot_path}")
+    print(f"Saved plot: {os.path.join(output_dir, 'xgboost_profit_optimization.png')}")
+    
+    plot_feature_importance(
+        importances.index.tolist(), 
+        importances.values, 
+        "XGBoost Initial Feature Importance", 
+        output_dir, 
+        "xgboost_feature_importance.png",
+        top_n=20
+    )
+    print(f"Saved plot: {os.path.join(output_dir, 'xgboost_feature_importance.png')}")
 
     top_features = importances.index[:best_num_features].tolist()
     print("-" * 55)
@@ -126,6 +128,15 @@ def run_xgboost(
 
     print(f"  Final K          : {final_k} clients")
     print(f"  Final CV profit  : {final_cv_profit:.1f} EUR")
+
+    plot_probability_distribution(
+        y_train.values, 
+        oof_probs_final, 
+        f"XGBoost OOF Probabilities (Final {best_num_features} Features)", 
+        output_dir, 
+        "xgboost_prob_distribution.png"
+    )
+    print(f"Saved plot: {os.path.join(output_dir, 'xgboost_prob_distribution.png')}")
 
     # ── Step 4: retrain on all data, predict test set, take top final_k ───
     final_model = xgb.XGBClassifier(**xgb_params)

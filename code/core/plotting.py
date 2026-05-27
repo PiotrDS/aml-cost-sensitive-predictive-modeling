@@ -4,7 +4,7 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 
-# Set a consistent beautiful style
+# Set a consistent style
 plt.style.use('seaborn-v0_8-whitegrid')
 sns.set_palette("muted")
 

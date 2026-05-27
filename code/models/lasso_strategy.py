@@ -303,29 +303,17 @@ def run_lasso(
         f"| avg features in CV = {int(best_row['n_features'])}"
     )
 
+    from core.plotting import plot_lasso_sweep, plot_feature_importance, plot_probability_distribution
     # ── Plot ───────────────────────────────────────────────────────────────
-    df_plot = df_valid.copy()
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
-
-    ax1.plot(df_plot["C"], df_plot["cv_profit"], marker="o", color="#1f77b4", lw=2)
-    ax1.axvline(best_C, color="red", ls="--", label=f"Best C={best_C:.4f}")
-    ax1.set_ylabel("CV Profit (EUR)")
-    ax1.set_title("Profit vs. L1 Regularization Strength [nested MI - no leakage]")
-    ax1.legend()
-    ax1.grid(True, alpha=0.4)
-
-    ax2.plot(df_plot["C"], df_plot["n_features"], marker="s", color="#2ca02c", lw=2)
-    ax2.axvline(best_C, color="red", ls="--")
-    ax2.set_xlabel("C (inverse of regularization strength)")
-    ax2.set_ylabel("Avg number of features/fold")
-    ax2.set_xscale("log")
-    ax2.grid(True, alpha=0.4)
-
-    plt.tight_layout()
-    plot_path = os.path.join(output_dir, "lasso_regularization_sweep.png")
-    plt.savefig(plot_path, dpi=300)
-    plt.close()
-    print(f"Saved: {plot_path}")
+    plot_lasso_sweep(
+        c_values=df_valid["C"],
+        profit_values=df_valid["cv_profit"],
+        features_count=df_valid["n_features"],
+        best_c=best_C,
+        output_dir=output_dir,
+        filename="lasso_regularization_sweep.png"
+    )
+    print(f"Saved: {os.path.join(output_dir, 'lasso_regularization_sweep.png')}")
 
     # ---------------------------------------------------------------- #
     # STEP 3: Final feature set (MI on full data) + greedy pruning
@@ -424,6 +412,25 @@ def run_lasso(
     print(f"Final threshold : {final_thresh:.4f}")
     print(f"Optimal K       : {final_k} clients")
     print(f"CV profit (fair): {final_cv_profit:.1f} EUR")
+
+    plot_probability_distribution(
+        y,
+        oof_probs,
+        f"Lasso OOF Probabilities (Final {len(active_features)} Features)",
+        output_dir,
+        "lasso_prob_distribution.png"
+    )
+    print(f"Saved plot: {os.path.join(output_dir, 'lasso_prob_distribution.png')}")
+
+    plot_feature_importance(
+        active_features,
+        final_model.coef_[0],
+        "Lasso Final Coefficients",
+        output_dir,
+        "lasso_feature_importance.png",
+        top_n=30
+    )
+    print(f"Saved plot: {os.path.join(output_dir, 'lasso_feature_importance.png')}")
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
