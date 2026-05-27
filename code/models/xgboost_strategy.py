@@ -1,6 +1,5 @@
 import os
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import xgboost as xgb
@@ -51,8 +50,11 @@ def run_xgboost(
     model_full = xgb.XGBClassifier(**xgb_params)
     model_full.fit(X_train, y_train)
 
-    importances = pd.Series(model_full.feature_importances_, index=X_train.columns)
-    importances = importances[importances > 0].sort_values(ascending=False)
+    importances = pd.Series(model_full.feature_importances_, index=X_train.columns).sort_values(
+        ascending=False
+    )
+    if (importances > 0).any():
+        importances = importances[importances > 0]
 
     # ── Step 2: CV feature-count sweep – use top-K profit, not a threshold ─
     print("\n--- Feature Optimization (5-Fold CV, top-K evaluation) ---")

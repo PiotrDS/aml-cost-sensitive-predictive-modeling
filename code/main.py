@@ -59,8 +59,8 @@ def main():
         for var in used_features:
             f.write(f"{var}\n")
 
-    print(f"\nZapisano: {obs_path}  ({len(selected_clients[:1000])} klientów)")
-    print(f"Zapisano: {vars_path}  ({len(used_features)} cech)")
+    print(f"\nSaved: {obs_path}  ({len(selected_clients[:1000])} clients)")
+    print(f"Saved: {vars_path}  ({len(used_features)} features)")
 
 
 if __name__ == "__main__":

@@ -17,7 +17,6 @@ Pipeline:
 import os
 import warnings
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.feature_selection import mutual_info_classif
@@ -265,13 +264,14 @@ def run_lasso(
     best_row = None
 
     print("\nSelecting best C that produces >=1 feature on full training data...")
+    
+    _mi = mutual_info_classif(X_outer, y_train, random_state=42)
+    _inner_idx = np.argsort(_mi)[::-1][:N_INNER_PRESCREEN]
+    _scaler = StandardScaler()
+    _X_check = _scaler.fit_transform(X_outer[:, _inner_idx])
+
     for _, row in df_valid_sorted.iterrows():
         candidate_C = float(row["C"])
-
-        _mi = mutual_info_classif(X_outer, y_train, random_state=42)
-        _inner_idx = np.argsort(_mi)[::-1][:N_INNER_PRESCREEN]
-        _scaler = StandardScaler()
-        _X_check = _scaler.fit_transform(X_outer[:, _inner_idx])
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -413,10 +413,13 @@ def run_lasso(
         y, oof_probs, len(active_features)
     )
 
-    # Derive optimal K from OOF probabilities
-    final_k = int(np.sum(oof_probs > final_thresh))
-    if final_k == 0:
-        final_k = 1000  # fallback
+    # Derive optimal K directly from OOF probabilities (top-K profit maximization)
+    order = np.argsort(oof_probs)[::-1]
+    y_sorted = y[order[: min(1000, len(y))]]
+    cum_tp = np.cumsum(y_sorted == 1)
+    cum_fp = np.cumsum(y_sorted == 0)
+    profits = cum_tp * 10 - cum_fp * 5 - len(active_features) * 200
+    final_k = int(np.argmax(profits)) + 1
 
     print(f"Final threshold : {final_thresh:.4f}")
     print(f"Optimal K       : {final_k} clients")
