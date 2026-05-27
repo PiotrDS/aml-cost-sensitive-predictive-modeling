@@ -264,7 +264,7 @@ def run_lasso(
     best_row = None
 
     print("\nSelecting best C that produces >=1 feature on full training data...")
-    
+
     _mi = mutual_info_classif(X_outer, y_train, random_state=42)
     _inner_idx = np.argsort(_mi)[::-1][:N_INNER_PRESCREEN]
     _scaler = StandardScaler()

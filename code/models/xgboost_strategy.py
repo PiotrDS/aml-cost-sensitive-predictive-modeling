@@ -50,9 +50,9 @@ def run_xgboost(
     model_full = xgb.XGBClassifier(**xgb_params)
     model_full.fit(X_train, y_train)
 
-    importances = pd.Series(model_full.feature_importances_, index=X_train.columns).sort_values(
-        ascending=False
-    )
+    importances = pd.Series(
+        model_full.feature_importances_, index=X_train.columns
+    ).sort_values(ascending=False)
     if (importances > 0).any():
         importances = importances[importances > 0]
 
