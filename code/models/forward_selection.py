@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.base import clone
-from sklearn.metrics import accuracy_score, balanced_accuracy_score
 from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.metrics import accuracy_score, balanced_accuracy_score
 
 # Note for end user: Use only forward_selection() function
 
@@ -15,8 +15,8 @@ class FeatureSelector:
         test_size=0.3,
         random_state=None,
         verbose=True,
-        features = None,
-        forward = True
+        features=None,
+        forward=True,
     ):
         self.model = model
         self.score_function = score_function
@@ -42,7 +42,22 @@ class FeatureSelector:
 
             y_true_top = y_test[idx]
             max_scores = []
-            threshs = [0.2, 0.04, 0.05, 0.06, 0.08, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+            threshs = [
+                0.2,
+                0.04,
+                0.05,
+                0.06,
+                0.08,
+                0.1,
+                0.2,
+                0.3,
+                0.4,
+                0.5,
+                0.6,
+                0.7,
+                0.8,
+                0.9,
+            ]
             for thresh in threshs:
                 y_pred_top = (y_proba[idx] > thresh).astype(int)
 
@@ -51,7 +66,11 @@ class FeatureSelector:
             scores.append(max(max_scores))
             opt_tresh.append(threshs[np.argmax(max_scores)])
 
-        return np.max(scores), self.top_ns[np.argmax(scores)], opt_tresh[np.argmax(scores)]
+        return (
+            np.max(scores),
+            self.top_ns[np.argmax(scores)],
+            opt_tresh[np.argmax(scores)],
+        )
 
     def fit(self, X_train, y_train, X_test, y_test):
         X_train = np.array(X_train)
@@ -74,13 +93,15 @@ class FeatureSelector:
                 for feature in remaining_features:
                     candidate_features = selected_features + [feature]
 
-                    score, best_subset, best_thresh  = self._evaluate_subset(
+                    score, best_subset, best_thresh = self._evaluate_subset(
                         candidate_features, X_train, X_test, y_train, y_test
                     )
 
                     scores.append((feature, score, best_subset, best_thresh))
 
-                best_feature, best_candidate_score, best_candidates, best_threshold = max(scores, key=lambda x: x[1])
+                best_feature, best_candidate_score, best_candidates, best_threshold = (
+                    max(scores, key=lambda x: x[1])
+                )
 
                 if best_candidate_score < best_score:
                     break
@@ -91,15 +112,12 @@ class FeatureSelector:
                 global_best_candidates = best_candidates
                 global_best_threshold = best_threshold
 
-
         elif self.forward == False:
-            selected_features = self.features.copy() 
+            selected_features = self.features.copy()
 
-            
             best_score, best_candidates, best_threshold = self._evaluate_subset(
                 selected_features, X_train, X_test, y_train, y_test
             )
-
 
             while len(selected_features) > 0:
                 scores = []
@@ -113,27 +131,27 @@ class FeatureSelector:
 
                     scores.append((feature, score, best_subset, best_thresh))
 
-                worst_feature, best_candidate_score, best_candidates, best_threshold = max(
-                    scores, key=lambda x: x[1]
+                worst_feature, best_candidate_score, best_candidates, best_threshold = (
+                    max(scores, key=lambda x: x[1])
                 )
-                
+
                 if best_candidate_score < best_score:
                     break
-                
+
                 selected_features.remove(worst_feature)
                 best_score = best_candidate_score
                 global_best_candidates = best_candidates
                 global_best_threshold = best_threshold
 
-
         self.selected_features_ = selected_features
         self.best_score_ = best_score
         self.best_threshold = global_best_threshold
         self.best_candidates = global_best_candidates
-            
 
         if self.verbose:
-            print(f"Features Selected: {self.selected_features_} \nScore Function: {self.best_score_}\nThreshold: {self.best_threshold}\nCandidates Number: {self.best_candidates}")
+            print(
+                f"Features Selected: {self.selected_features_} \nScore Function: {self.best_score_}\nThreshold: {self.best_threshold}\nCandidates Number: {self.best_candidates}"
+            )
 
         return self
 
@@ -143,20 +161,16 @@ class FeatureSelector:
     def fit_transform(self, X, y):
         self.fit(X, y)
         return self.transform(X)
-    
+
+
 import numpy as np
 from sklearn.base import clone
 from sklearn.model_selection import train_test_split
 
+
 def single_feature_ranking(
-    X_train,
-    y_train,
-    X_test,
-    y_test,
-    model,
-    score_function,
-    verbose=False
-    ):
+    X_train, y_train, X_test, y_test, model, score_function, verbose=False
+):
     X_train = np.array(X_train)
     y_train = np.array(y_train).ravel()
 
@@ -176,11 +190,11 @@ def single_feature_ranking(
 
         y_true_top = y_test
 
-        s =[]
-        a=[]
-        b=[]
-        opt_tresh=[]
-        thresholds=[0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        s = []
+        a = []
+        b = []
+        opt_tresh = []
+        thresholds = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
         for thres in thresholds:
             y_pred_top = (y_proba > thres).astype(int)
 
@@ -197,29 +211,38 @@ def single_feature_ranking(
         opt_tresh.append(thresholds[np.argmax(s)])
         if verbose:
             print(f"Feature {j}, best score: {max(s)}, thresh: {opt_tresh}")
-            
+
     ranking = np.argsort(scores)[::-1]
 
     return ranking, np.array(scores), np.array(acs), np.array(bas)
+
 
 def score_function(y_true, y_pred, n_features):
     fp = np.sum((y_pred == 1) & (y_true == 0))
     tp = np.sum((y_pred == 1) & (y_true == 1))
 
-    cost = 10*tp - 5*fp - 200*n_features
+    cost = 10 * tp - 5 * fp - 200 * n_features
     return cost
 
 
-def forward_selection(X_train,y_train, X_test, y_test, model=GradientBoostingClassifier(n_estimators=10)):
-    ranking, _, _, _ = single_feature_ranking(X_train,y_train, X_test, y_test, model, score_function, verbose=False)
+def forward_selection(
+    X_train, y_train, X_test, y_test, model=GradientBoostingClassifier(n_estimators=10)
+):
+    ranking, _, _, _ = single_feature_ranking(
+        X_train, y_train, X_test, y_test, model, score_function, verbose=False
+    )
     selector = FeatureSelector(
-    model=model,
-    score_function=score_function,
-    top_ns=[obs_no for obs_no in range(5, 1005, 5)],
-    features=list(ranking[:50]),
-    verbose=True
+        model=model,
+        score_function=score_function,
+        top_ns=[obs_no for obs_no in range(5, 1005, 5)],
+        features=list(ranking[:50]),
+        verbose=True,
     )
 
     selector.fit(X_train, y_train, X_test, y_test)
 
-    return selector.selected_features_, selector.best_threshold, selector.best_candidates
+    return (
+        selector.selected_features_,
+        selector.best_threshold,
+        selector.best_candidates,
+    )
