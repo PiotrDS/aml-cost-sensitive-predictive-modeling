@@ -12,23 +12,10 @@ echo
 echo "Running all models for student_ids=${STUDENT_IDS}"
 echo
 
-MODELS=("xgb" "lasso" "forward" "combined")
+uv run python code/main.py \
+    --model all \
+    --student_ids "${STUDENT_IDS}"
 
-for MODEL in "${MODELS[@]}"; do
-    echo "=========================================="
-    echo "Running model: ${MODEL}"
-    echo "=========================================="
-
-    uv run python code/main.py \
-        --model "${MODEL}" \
-        --student_ids "${STUDENT_IDS}"
-
-    echo
-done
-
+echo
 echo "All models finished."
-echo "Results should be saved in:"
-echo "  submission/xgboost/"
-echo "  submission/lasso/"
-echo "  submission/forward/"
-echo "  submission/combined/"
+echo "Leaderboard files should be saved in submission/leaderboard/."

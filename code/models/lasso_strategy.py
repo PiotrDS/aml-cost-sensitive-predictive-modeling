@@ -24,6 +24,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 
+from core.reporting import StrategyResult, save_strategy_summary
+
 # -----------------------------------------------------------------------
 # Pre-screening hyperparameters
 # -----------------------------------------------------------------------
@@ -195,7 +197,13 @@ def run_lasso(
     y_train: pd.Series,
     X_test: pd.DataFrame,
     output_dir: str = ".",
-) -> tuple[list[int], list[int]]:
+) -> StrategyResult:
+    """Run the L1 logistic-regression strategy and return a standard result.
+
+    The strategy uses mutual-information pre-screening, a regularization sweep,
+    greedy pruning of active variables and a final top-K contact cutoff selected
+    from out-of-fold predictions under the project profit function.
+    """
     print("=" * 65)
     print("  Lasso Strategy - CV without data leakage (nested MI per fold)")
     print("=" * 65)
@@ -458,4 +466,20 @@ def run_lasso(
     print(f"  Used features    : {len(used_features_idx)}")
     print(f"  Feature cost     : {len(used_features_idx) * 200} EUR")
 
-    return best_clients_1_based, used_features_idx
+    result = StrategyResult(
+        strategy="lasso",
+        selected_clients=best_clients_1_based,
+        used_features=used_features_idx,
+        estimated_profit=final_cv_profit,
+        opt_k=final_k,
+        model_label=f"l1_logistic_C={best_C:.4f}",
+        validation_scheme="5-fold OOF CV",
+        extra={
+            "feature_names": ",".join(active_features),
+            "threshold": float(final_thresh),
+            "pruned_cv_profit": float(base_profit),
+        },
+    )
+    summary_path = save_strategy_summary(result, output_dir, "lasso_summary.csv")
+    print(f"Saved summary: {summary_path}")
+    return result

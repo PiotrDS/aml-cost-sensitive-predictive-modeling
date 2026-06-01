@@ -30,9 +30,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import StandardScaler
 
+from core.reporting import StrategyResult, save_strategy_summary
+
 try:
     from models.forward_selection import forward_selection
-except Exception:  # pragma: no cover - useful when running this file outside project root
+except Exception:
     forward_selection = None
 
 
@@ -59,6 +61,8 @@ XGB_PARAMS = {
 
 @dataclass
 class EvaluationResult:
+    """Cross-validated evaluation summary for one feature set."""
+
     best_profit: float
     best_k: int
     best_model: str
@@ -75,6 +79,7 @@ class EvaluationResult:
 
 
 def _as_numpy_y(y_train: pd.Series | np.ndarray) -> np.ndarray:
+    """Return the target vector as a one-dimensional NumPy array."""
     return np.asarray(y_train).ravel()
 
 
@@ -104,6 +109,7 @@ def _optimize_top_k(
     n_vars: int,
     max_clients: int = MAX_CLIENTS,
 ) -> tuple[float, int, np.ndarray, np.ndarray]:
+    """Return the best profit, best K and full top-K profit curve."""
     ks, profits = _profit_curve_top_k(y_true, probs, n_vars, max_clients)
     best_idx = int(np.argmax(profits))
     return float(profits[best_idx]), int(ks[best_idx]), ks, profits
@@ -275,6 +281,7 @@ def _forward_candidates(
 
 
 def _normalize_scores(scores: dict[str, float]) -> dict[str, float]:
+    """Scale source-specific scores to the [0, 1] range."""
     if not scores:
         return {}
     max_abs = max(abs(v) for v in scores.values())
@@ -564,6 +571,7 @@ def _feature_to_submission_index(feature: str, columns: Iterable[str]) -> int:
 
 
 def _savefig(path: str) -> None:
+    """Save the current Matplotlib figure and close it."""
     plt.tight_layout()
     plt.savefig(path, dpi=300, bbox_inches="tight")
     plt.close()
@@ -572,6 +580,7 @@ def _savefig(path: str) -> None:
 
 
 def _plot_lasso_sweep(sweep_df: pd.DataFrame, output_dir: str) -> None:
+    """Save the LASSO regularization sweep used during candidate generation."""
     if sweep_df.empty:
         return
 
@@ -592,6 +601,7 @@ def _plot_lasso_sweep(sweep_df: pd.DataFrame, output_dir: str) -> None:
 
 
 def _plot_feature_sources(pool_df: pd.DataFrame, selected_features: list[str], output_dir: str) -> None:
+    """Save a bar chart showing agreement between feature-selection methods."""
     if pool_df.empty:
         return
 
@@ -610,6 +620,7 @@ def _plot_feature_sources(pool_df: pd.DataFrame, selected_features: list[str], o
 
 
 def _plot_model_comparison(rows: list[dict], output_dir: str) -> None:
+    """Save the model-comparison plot for initial and pruned feature sets."""
     if not rows:
         return
 
@@ -628,6 +639,7 @@ def _plot_model_comparison(rows: list[dict], output_dir: str) -> None:
 
 
 def _plot_pruning_history(history_df: pd.DataFrame, output_dir: str) -> None:
+    """Save the backward-pruning profit history plot."""
     if history_df.empty:
         return
 
@@ -643,6 +655,7 @@ def _plot_pruning_history(history_df: pd.DataFrame, output_dir: str) -> None:
 
 
 def _plot_topk_profit_curve(eval_result: EvaluationResult, output_dir: str) -> None:
+    """Save the final top-K customer-contact profit curve."""
     plt.figure(figsize=(9, 5))
     plt.plot(eval_result.ks, eval_result.profits_by_k, linewidth=2)
     plt.axvline(eval_result.best_k, linestyle="--", label=f"Best K={eval_result.best_k}")
@@ -656,6 +669,7 @@ def _plot_topk_profit_curve(eval_result: EvaluationResult, output_dir: str) -> N
 
 
 def _plot_weight_sweep(eval_result: EvaluationResult, output_dir: str) -> None:
+    """Save the ensemble weight sweep plot."""
     df = pd.DataFrame(eval_result.all_rows)
     if df.empty:
         return
@@ -681,6 +695,7 @@ def _plot_probability_distribution(
     probs: np.ndarray,
     output_dir: str,
 ) -> None:
+    """Save the OOF probability distribution for the final combined model."""
     plt.figure(figsize=(9, 5))
     plt.hist(probs[y_true == 0], bins=30, alpha=0.55, density=True, label="Class 0")
     plt.hist(probs[y_true == 1], bins=30, alpha=0.55, density=True, label="Class 1")
@@ -702,13 +717,12 @@ def run_combined(
     y_train: pd.Series,
     X_test: pd.DataFrame,
     output_dir: str = ".",
-) -> tuple[list[int], list[int]]:
-    """
-    Main function called by main.py.
+) -> StrategyResult:
+    """Run the combined strategy and return a standard result.
 
-    Returns:
-        selected_clients: 1-based row indexes of test clients to contact
-        used_features:    variable indexes for *_vars.txt
+    The method uses XGBoost, LASSO and forward selection as candidate-feature
+    sources. It then prunes the combined feature set under 5-fold OOF profit and
+    refits the selected weighted ensemble on the full training set.
     """
     os.makedirs(output_dir, exist_ok=True)
 
@@ -844,4 +858,20 @@ def run_combined(
     print(f"Feature cost      : {len(used_features) * VARIABLE_COST} EUR")
     print(f"Features          : {final_features}")
 
-    return selected_clients, used_features
+    result = StrategyResult(
+        strategy="combined",
+        selected_clients=selected_clients,
+        used_features=used_features,
+        estimated_profit=final_eval.best_profit,
+        opt_k=final_eval.best_k,
+        model_label=final_eval.best_model,
+        validation_scheme="5-fold OOF CV after candidate generation",
+        extra={
+            "feature_names": ",".join(final_features),
+            "xgb_weight": float(final_eval.best_weight_xgb),
+            "summary_csv": summary_path,
+        },
+    )
+    summary_path_std = save_strategy_summary(result, output_dir, "combined_summary.csv")
+    print(f"      Saved standard summary: {summary_path_std}")
+    return result

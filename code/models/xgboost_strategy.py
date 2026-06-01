@@ -1,37 +1,99 @@
+"""XGBoost strategy optimized under the project profit function."""
+
+from __future__ import annotations
+
 import os
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import xgboost as xgb
 from sklearn.model_selection import StratifiedKFold
 
+from core.metrics import optimize_top_k
 from core.plotting import (
-        plot_feature_importance,
-        plot_probability_distribution,
-        plot_profit_optimization_curve,
+    plot_feature_importance,
+    plot_probability_distribution,
+    plot_profit_optimization_curve,
 )
+from core.reporting import StrategyResult, save_strategy_summary
 
-def _optimize_top_k(
-    y_true: np.ndarray,
-    probs: np.ndarray,
-    n_vars: int,
-    max_clients: int = 1000,
-) -> tuple[float, int]:
-    """
-    Vectorised search for K in [1, max_clients] that maximises profit.
-    Clients are sorted descending by predicted probability so the first K
-    rows are exactly the ones we would contact.
-    """
-    order = np.argsort(probs)[::-1]
-    y_sorted = y_true[order[:max_clients]]
+RANDOM_STATE = 42
+MAX_CLIENTS = 1000
+VARIABLE_COST = 200
 
-    cum_tp = np.cumsum(y_sorted == 1)
-    cum_fp = np.cumsum(y_sorted == 0)
-    ks = np.arange(1, len(y_sorted) + 1)
 
-    profits = cum_tp * 10 - cum_fp * 5 - n_vars * 200
-    best = int(np.argmax(profits))
-    return float(profits[best]), int(ks[best])
+XGB_PARAMS = {
+    "n_estimators": 100,
+    "max_depth": 3,
+    "learning_rate": 0.1,
+    "scale_pos_weight": 2,
+    "random_state": RANDOM_STATE,
+    "n_jobs": -1,
+    "eval_metric": "logloss",
+}
+
+
+def _feature_to_submission_index(feature: str, columns: pd.Index) -> int:
+    """Convert a variable name like ``V123`` into the submission variable id."""
+    text = str(feature)
+    if text.upper().startswith("V") and text[1:].isdigit():
+        return int(text[1:])
+    return list(columns).index(feature) + 1
+
+
+def _rank_features_by_xgboost(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+) -> pd.Series:
+    """Fit one XGBoost model and return variables sorted by importance."""
+    model = xgb.XGBClassifier(**XGB_PARAMS)
+    model.fit(X_train, y_train)
+    importances = pd.Series(model.feature_importances_, index=X_train.columns).sort_values(ascending=False)
+    if (importances > 0).any():
+        importances = importances[importances > 0]
+    return importances
+
+
+def _cross_validated_probabilities(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    features: list[str],
+    cv: StratifiedKFold,
+) -> np.ndarray:
+    """Return out-of-fold XGBoost probabilities for a fixed feature set."""
+    oof_probs = np.zeros(len(X_train))
+    for train_idx, valid_idx in cv.split(X_train, y_train):
+        model = xgb.XGBClassifier(**XGB_PARAMS)
+        model.fit(X_train.iloc[train_idx][features], y_train.iloc[train_idx])
+        oof_probs[valid_idx] = model.predict_proba(X_train.iloc[valid_idx][features])[:, 1]
+    return oof_probs
+
+
+def _sweep_feature_count(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    importances: pd.Series,
+    cv: StratifiedKFold,
+    max_features: int = 30,
+) -> tuple[int, float, pd.DataFrame]:
+    """Evaluate top-N XGBoost feature sets and return the best feature count."""
+    best_profit = -np.inf
+    best_num_features = 1
+    rows = []
+
+    for num_features in range(1, min(max_features, len(importances)) + 1):
+        current_features = importances.index[:num_features].tolist()
+        oof_probs = _cross_validated_probabilities(X_train, y_train, current_features, cv)
+        profit, opt_k = optimize_top_k(y_train.values, oof_probs, num_features, MAX_CLIENTS)
+        rows.append({"n_features": num_features, "cv_profit": profit, "opt_k": opt_k})
+
+        print(f"  Features: {num_features:2d} | CV Profit: {profit:8.1f} EUR  (opt. K={opt_k})")
+        if profit > best_profit:
+            best_profit = profit
+            best_num_features = num_features
+
+    return best_num_features, float(best_profit), pd.DataFrame(rows)
 
 
 def run_xgboost(
@@ -39,126 +101,93 @@ def run_xgboost(
     y_train: pd.Series,
     X_test: pd.DataFrame,
     output_dir: str = ".",
-) -> tuple[list[int], list[int]]:
+) -> StrategyResult:
+    """Train the XGBoost strategy and return selected test clients and variables.
+
+    The method ranks variables with XGBoost, sweeps the number of top variables
+    using 5-fold out-of-fold predictions, chooses the best top-K contact cutoff,
+    and finally refits the selected model on the full training set.
+    """
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+
     print("Initializing XGBoost strategy...")
+    importances = _rank_features_by_xgboost(X_train, y_train)
 
-    xgb_params = {
-        "n_estimators": 100,
-        "max_depth": 3,
-        "learning_rate": 0.1,
-        "scale_pos_weight": 2,
-        "random_state": 42,
-        "n_jobs": -1,
-    }
-
-    # ── Step 1: rank features by importance on full training data ──────────
-    model_full = xgb.XGBClassifier(**xgb_params)
-    model_full.fit(X_train, y_train)
-
-    importances = pd.Series(
-        model_full.feature_importances_, index=X_train.columns
-    ).sort_values(ascending=False)
-    if (importances > 0).any():
-        importances = importances[importances > 0]
-
-    # ── Step 2: CV feature-count sweep – use top-K profit, not a threshold ─
     print("\n--- Feature Optimization (5-Fold CV, top-K evaluation) ---")
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+    best_num_features, best_sweep_profit, sweep_df = _sweep_feature_count(X_train, y_train, importances, cv)
 
-    best_profit = -np.inf
-    best_num_features = 1
-    profit_ranking = []
+    sweep_path = os.path.join(output_dir, "xgboost_feature_count_sweep.csv")
+    sweep_df.to_csv(sweep_path, index=False)
+    print(f"Saved sweep table: {sweep_path}")
 
-    for k in range(1, min(30, len(importances)) + 1):
-        current_features = importances.index[:k].tolist()
-        oof_probs = np.zeros(len(X_train))
-
-        for tr_idx, val_idx in cv.split(X_train, y_train):
-            m = xgb.XGBClassifier(**xgb_params)
-            m.fit(
-                X_train.iloc[tr_idx][current_features],
-                y_train.iloc[tr_idx],
-            )
-            oof_probs[val_idx] = m.predict_proba(
-                X_train.iloc[val_idx][current_features]
-            )[:, 1]
-
-        profit, opt_k = _optimize_top_k(y_train.values, oof_probs, n_vars=k)
-        profit_ranking.append((k, profit))
-        print(f"  Features: {k:2d} | CV Profit: {profit:8.1f} EUR  (opt. K={opt_k})")
-
-        if profit > best_profit:
-            best_profit = profit
-            best_num_features = k
-
-    # ── Plot ───────────────────────────────────────────────────────────────
-    features, profits = zip(*profit_ranking)
-    plot_profit_optimization_curve(
-        features,
-        profits,
-        x_label="Number of Selected Features (Top K)",
-        title="Profit Optimization Curve vs Number of Features (top-K evaluation)",
+    profit_plot = plot_profit_optimization_curve(
+        sweep_df["n_features"],
+        sweep_df["cv_profit"],
+        x_label="Number of selected features",
+        title="XGBoost profit vs number of variables",
         best_x=best_num_features,
         output_dir=output_dir,
         filename="xgboost_profit_optimization.png",
     )
-    print(f"Saved plot: {os.path.join(output_dir, 'xgboost_profit_optimization.png')}")
+    print(f"Saved plot: {profit_plot}")
 
-    plot_feature_importance(
+    importance_plot = plot_feature_importance(
         importances.index.tolist(),
         importances.values,
-        "XGBoost Initial Feature Importance",
+        "XGBoost initial feature importance",
         output_dir,
         "xgboost_feature_importance.png",
         top_n=20,
     )
-    print(f"Saved plot: {os.path.join(output_dir, 'xgboost_feature_importance.png')}")
+    print(f"Saved plot: {importance_plot}")
 
-    top_features = importances.index[:best_num_features].tolist()
+    selected_features = importances.index[:best_num_features].tolist()
     print("-" * 55)
-    print(
-        f"  Optimal features : {best_num_features}  (CV profit: {best_profit:.1f} EUR)"
-    )
-    print(f"  Selected features: {top_features}\n")
+    print(f"  Optimal features : {best_num_features}  (CV profit: {best_sweep_profit:.1f} EUR)")
+    print(f"  Selected features: {selected_features}\n")
 
-    # ── Step 3: OOF probs on selected features → find final K ─────────────
-    oof_probs_final = np.zeros(len(X_train))
-    for tr_idx, val_idx in cv.split(X_train[top_features], y_train):
-        m = xgb.XGBClassifier(**xgb_params)
-        m.fit(X_train.iloc[tr_idx][top_features], y_train.iloc[tr_idx])
-        oof_probs_final[val_idx] = m.predict_proba(X_train.iloc[val_idx][top_features])[
-            :, 1
-        ]
-
-    final_cv_profit, final_k = _optimize_top_k(
-        y_train.values, oof_probs_final, n_vars=best_num_features
-    )
-
+    oof_probs = _cross_validated_probabilities(X_train, y_train, selected_features, cv)
+    final_cv_profit, final_k = optimize_top_k(y_train.values, oof_probs, best_num_features, MAX_CLIENTS)
     print(f"  Final K          : {final_k} clients")
     print(f"  Final CV profit  : {final_cv_profit:.1f} EUR")
 
-    plot_probability_distribution(
+    probability_plot = plot_probability_distribution(
         y_train.values,
-        oof_probs_final,
-        f"XGBoost OOF Probabilities (Final {best_num_features} Features)",
+        oof_probs,
+        f"XGBoost OOF probabilities ({best_num_features} variables)",
         output_dir,
         "xgboost_prob_distribution.png",
     )
-    print(f"Saved plot: {os.path.join(output_dir, 'xgboost_prob_distribution.png')}")
+    print(f"Saved plot: {probability_plot}")
 
-    # ── Step 4: retrain on all data, predict test set, take top final_k ───
-    final_model = xgb.XGBClassifier(**xgb_params)
-    final_model.fit(X_train[top_features], y_train)
-
-    test_probs = final_model.predict_proba(X_test[top_features])[:, 1]
-    n_select = min(final_k, 1000)
+    final_model = xgb.XGBClassifier(**XGB_PARAMS)
+    final_model.fit(X_train[selected_features], y_train)
+    test_probs = final_model.predict_proba(X_test[selected_features])[:, 1]
+    n_select = min(final_k, MAX_CLIENTS)
     top_indices = np.argsort(test_probs)[::-1][:n_select]
 
-    best_clients_1_based = [int(i) + 1 for i in top_indices]
-    used_features_idx = [int(v.replace("V", "")) for v in top_features]
+    selected_clients = [int(index) + 1 for index in top_indices]
+    used_features = [_feature_to_submission_index(feature, X_train.columns) for feature in selected_features]
 
-    print(f"\n  Selected clients : {len(best_clients_1_based)}")
-    print(f"  Used features    : {len(used_features_idx)}")
-    print(f"  Feature cost     : {len(used_features_idx) * 200} EUR")
+    print(f"\n  Selected clients : {len(selected_clients)}")
+    print(f"  Used features    : {len(used_features)}")
+    print(f"  Feature cost     : {len(used_features) * VARIABLE_COST} EUR")
 
-    return best_clients_1_based, used_features_idx
+    result = StrategyResult(
+        strategy="xgboost",
+        selected_clients=selected_clients,
+        used_features=used_features,
+        estimated_profit=final_cv_profit,
+        opt_k=final_k,
+        model_label=f"xgboost_top_{best_num_features}",
+        validation_scheme="5-fold OOF CV",
+        extra={
+            "feature_names": ",".join(selected_features),
+            "sweep_best_profit": best_sweep_profit,
+            "sweep_csv": sweep_path,
+        },
+    )
+    summary_path = save_strategy_summary(result, output_dir, "xgboost_summary.csv")
+    print(f"Saved summary: {summary_path}")
+    return result
