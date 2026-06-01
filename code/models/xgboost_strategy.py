@@ -5,6 +5,11 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.model_selection import StratifiedKFold
 
+from core.plotting import (
+        plot_feature_importance,
+        plot_probability_distribution,
+        plot_profit_optimization_curve,
+)
 
 def _optimize_top_k(
     y_true: np.ndarray,
@@ -85,12 +90,6 @@ def run_xgboost(
         if profit > best_profit:
             best_profit = profit
             best_num_features = k
-
-    from core.plotting import (
-        plot_feature_importance,
-        plot_probability_distribution,
-        plot_profit_optimization_curve,
-    )
 
     # ── Plot ───────────────────────────────────────────────────────────────
     features, profits = zip(*profit_ranking)

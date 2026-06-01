@@ -4,13 +4,13 @@ import os
 from core.data_loader import load_data
 from models.lasso_strategy import run_lasso
 from models.xgboost_strategy import run_xgboost
-
-# from models.stepwise_strategy import run_stepwise
+from models.forward_strategy import run_forward
+from models.combined_strategy import run_combined
 
 
 def main():
     parser = argparse.ArgumentParser(description="AML Project 2: Cost-Sensitive Model")
-    parser.add_argument("--model", choices=["xgb", "lasso", "stepwise"], default="xgb")
+    parser.add_argument("--model", choices=["xgb", "lasso", "forward", "combined"], default="combined")
     parser.add_argument(
         "--student_ids",
         type=str,
@@ -27,9 +27,12 @@ def main():
     print(f"Class balance: {y_train.mean():.3f} positive rate\n")
 
     # ── Output directory:  submission/<model>/ ────────────────────────────
-    model_name = {"xgb": "xgboost", "lasso": "lasso", "stepwise": "stepwise"}[
-        args.model
-    ]
+    model_name = {
+        "xgb": "xgboost",
+        "lasso": "lasso",
+        "forward": "forward",
+        "combined": "combined",
+    }[args.model]
     output_dir = os.path.join(os.path.dirname(__file__), "..", "submission", model_name)
     os.makedirs(output_dir, exist_ok=True)
 
@@ -42,9 +45,14 @@ def main():
         selected_clients, used_features = run_lasso(
             X_train, y_train, X_test, output_dir=output_dir
         )
-    elif args.model == "stepwise":
-        pass  # selected_clients, used_features = run_stepwise(...)
-        return
+    elif args.model == "forward":
+        selected_clients, used_features = run_forward(
+            X_train, y_train, X_test, output_dir=output_dir
+        )
+    elif args.model == "combined":
+        selected_clients, used_features = run_combined(
+            X_train, y_train, X_test, output_dir=output_dir
+        )
 
     # ── Save submission files ─────────────────────────────────────────────
     student_ids = args.student_ids
