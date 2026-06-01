@@ -6,7 +6,9 @@ from pathlib import Path
 import pandas as pd
 
 
-def load_data(data_dir: str | os.PathLike[str]) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
+def load_data(
+    data_dir: str | os.PathLike[str],
+) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
     """Load training variables, training labels and test variables.
 
     Args:

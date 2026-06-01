@@ -19,12 +19,11 @@ import warnings
 
 import numpy as np
 import pandas as pd
+from core.reporting import StrategyResult, save_strategy_summary
 from sklearn.feature_selection import mutual_info_classif
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import StandardScaler
-
-from core.reporting import StrategyResult, save_strategy_summary
 
 # -----------------------------------------------------------------------
 # Pre-screening hyperparameters

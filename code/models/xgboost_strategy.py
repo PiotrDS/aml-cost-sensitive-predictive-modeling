@@ -8,8 +8,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from sklearn.model_selection import StratifiedKFold
-
 from core.metrics import optimize_top_k
 from core.plotting import (
     plot_feature_importance,
@@ -17,6 +15,7 @@ from core.plotting import (
     plot_profit_optimization_curve,
 )
 from core.reporting import StrategyResult, save_strategy_summary
+from sklearn.model_selection import StratifiedKFold
 
 RANDOM_STATE = 42
 MAX_CLIENTS = 1000
@@ -49,7 +48,9 @@ def _rank_features_by_xgboost(
     """Fit one XGBoost model and return variables sorted by importance."""
     model = xgb.XGBClassifier(**XGB_PARAMS)
     model.fit(X_train, y_train)
-    importances = pd.Series(model.feature_importances_, index=X_train.columns).sort_values(ascending=False)
+    importances = pd.Series(
+        model.feature_importances_, index=X_train.columns
+    ).sort_values(ascending=False)
     if (importances > 0).any():
         importances = importances[importances > 0]
     return importances
@@ -66,7 +67,9 @@ def _cross_validated_probabilities(
     for train_idx, valid_idx in cv.split(X_train, y_train):
         model = xgb.XGBClassifier(**XGB_PARAMS)
         model.fit(X_train.iloc[train_idx][features], y_train.iloc[train_idx])
-        oof_probs[valid_idx] = model.predict_proba(X_train.iloc[valid_idx][features])[:, 1]
+        oof_probs[valid_idx] = model.predict_proba(X_train.iloc[valid_idx][features])[
+            :, 1
+        ]
     return oof_probs
 
 
@@ -84,11 +87,17 @@ def _sweep_feature_count(
 
     for num_features in range(1, min(max_features, len(importances)) + 1):
         current_features = importances.index[:num_features].tolist()
-        oof_probs = _cross_validated_probabilities(X_train, y_train, current_features, cv)
-        profit, opt_k = optimize_top_k(y_train.values, oof_probs, num_features, MAX_CLIENTS)
+        oof_probs = _cross_validated_probabilities(
+            X_train, y_train, current_features, cv
+        )
+        profit, opt_k = optimize_top_k(
+            y_train.values, oof_probs, num_features, MAX_CLIENTS
+        )
         rows.append({"n_features": num_features, "cv_profit": profit, "opt_k": opt_k})
 
-        print(f"  Features: {num_features:2d} | CV Profit: {profit:8.1f} EUR  (opt. K={opt_k})")
+        print(
+            f"  Features: {num_features:2d} | CV Profit: {profit:8.1f} EUR  (opt. K={opt_k})"
+        )
         if profit > best_profit:
             best_profit = profit
             best_num_features = num_features
@@ -115,7 +124,9 @@ def run_xgboost(
 
     print("\n--- Feature Optimization (5-Fold CV, top-K evaluation) ---")
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
-    best_num_features, best_sweep_profit, sweep_df = _sweep_feature_count(X_train, y_train, importances, cv)
+    best_num_features, best_sweep_profit, sweep_df = _sweep_feature_count(
+        X_train, y_train, importances, cv
+    )
 
     sweep_path = os.path.join(output_dir, "xgboost_feature_count_sweep.csv")
     sweep_df.to_csv(sweep_path, index=False)
@@ -144,11 +155,15 @@ def run_xgboost(
 
     selected_features = importances.index[:best_num_features].tolist()
     print("-" * 55)
-    print(f"  Optimal features : {best_num_features}  (CV profit: {best_sweep_profit:.1f} EUR)")
+    print(
+        f"  Optimal features : {best_num_features}  (CV profit: {best_sweep_profit:.1f} EUR)"
+    )
     print(f"  Selected features: {selected_features}\n")
 
     oof_probs = _cross_validated_probabilities(X_train, y_train, selected_features, cv)
-    final_cv_profit, final_k = optimize_top_k(y_train.values, oof_probs, best_num_features, MAX_CLIENTS)
+    final_cv_profit, final_k = optimize_top_k(
+        y_train.values, oof_probs, best_num_features, MAX_CLIENTS
+    )
     print(f"  Final K          : {final_k} clients")
     print(f"  Final CV profit  : {final_cv_profit:.1f} EUR")
 
@@ -168,7 +183,10 @@ def run_xgboost(
     top_indices = np.argsort(test_probs)[::-1][:n_select]
 
     selected_clients = [int(index) + 1 for index in top_indices]
-    used_features = [_feature_to_submission_index(feature, X_train.columns) for feature in selected_features]
+    used_features = [
+        _feature_to_submission_index(feature, X_train.columns)
+        for feature in selected_features
+    ]
 
     print(f"\n  Selected clients : {len(selected_clients)}")
     print(f"  Used features    : {len(used_features)}")

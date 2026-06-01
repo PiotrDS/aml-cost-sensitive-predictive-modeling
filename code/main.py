@@ -33,7 +33,9 @@ MODEL_REGISTRY: dict[str, tuple[str, StrategyRunner]] = {
 
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments for a single model or the full run."""
-    parser = argparse.ArgumentParser(description="AML Project 2: cost-sensitive predictive modeling")
+    parser = argparse.ArgumentParser(
+        description="AML Project 2: cost-sensitive predictive modeling"
+    )
     parser.add_argument(
         "--model",
         choices=[*MODEL_REGISTRY.keys(), "all"],
@@ -91,7 +93,9 @@ def run_one_strategy(
             save_submission_files(result, output_dir, student_ids)
             summary_path = save_strategy_summary(result, output_dir)
 
-            print(f"\nSaved: {result.obs_path}  ({len(result.selected_clients[:1000])} clients)")
+            print(
+                f"\nSaved: {result.obs_path}  ({len(result.selected_clients[:1000])} clients)"
+            )
             print(f"Saved: {result.vars_path}  ({len(result.used_features)} features)")
             print(f"Saved summary: {summary_path}")
             print(f"Saved run log: {log_path}")

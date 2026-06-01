@@ -70,7 +70,21 @@ class FeatureSelector:
         probabilities = model.predict_proba(X_valid[:, features])[:, 1]
         order = np.argsort(probabilities)[::-1]
 
-        thresholds = (0.04, 0.05, 0.06, 0.08, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
+        thresholds = (
+            0.04,
+            0.05,
+            0.06,
+            0.08,
+            0.10,
+            0.20,
+            0.30,
+            0.40,
+            0.50,
+            0.60,
+            0.70,
+            0.80,
+            0.90,
+        )
         best = SubsetEvaluation(profit=-np.inf, best_k=0, threshold=0.5)
 
         for top_n in self.top_ns:
@@ -81,7 +95,9 @@ class FeatureSelector:
                 y_pred = (p_top > threshold).astype(int)
                 profit = self.score_function(y_top, y_pred, len(features))
                 if profit > best.profit:
-                    best = SubsetEvaluation(float(profit), int(len(selected)), float(threshold))
+                    best = SubsetEvaluation(
+                        float(profit), int(len(selected)), float(threshold)
+                    )
 
         return best
 
@@ -98,7 +114,11 @@ class FeatureSelector:
         X_valid = np.asarray(X_valid)
         y_valid = np.asarray(y_valid).ravel()
 
-        candidates = self.features if self.features is not None else list(range(X_train.shape[1]))
+        candidates = (
+            self.features
+            if self.features is not None
+            else list(range(X_train.shape[1]))
+        )
         if self.forward:
             self._fit_forward(candidates, X_train, X_valid, y_train, y_valid)
         else:
@@ -133,10 +153,14 @@ class FeatureSelector:
             trial_results = []
             for feature in remaining:
                 trial_features = selected + [feature]
-                evaluation = self._evaluate_subset(trial_features, X_train, X_valid, y_train, y_valid)
+                evaluation = self._evaluate_subset(
+                    trial_features, X_train, X_valid, y_train, y_valid
+                )
                 trial_results.append((feature, evaluation))
 
-            best_feature, best_eval = max(trial_results, key=lambda item: item[1].profit)
+            best_feature, best_eval = max(
+                trial_results, key=lambda item: item[1].profit
+            )
             if best_eval.profit < best_score:
                 break
 
@@ -172,10 +196,14 @@ class FeatureSelector:
             trial_results = []
             for feature in selected:
                 trial_features = [item for item in selected if item != feature]
-                trial_eval = self._evaluate_subset(trial_features, X_train, X_valid, y_train, y_valid)
+                trial_eval = self._evaluate_subset(
+                    trial_features, X_train, X_valid, y_train, y_valid
+                )
                 trial_results.append((feature, trial_features, trial_eval))
 
-            _, best_trial_features, best_trial_eval = max(trial_results, key=lambda item: item[2].profit)
+            _, best_trial_features, best_trial_eval = max(
+                trial_results, key=lambda item: item[2].profit
+            )
             if best_trial_eval.profit >= best_score:
                 selected = best_trial_features
                 best_score = best_trial_eval.profit
@@ -245,7 +273,9 @@ def single_feature_ranking(
             prediction = (probabilities > threshold).astype(int)
             threshold_profits.append(score_function(y_valid, prediction, 1))
             threshold_accuracies.append(accuracy_score(y_valid, prediction))
-            threshold_balanced_accuracies.append(balanced_accuracy_score(y_valid, prediction))
+            threshold_balanced_accuracies.append(
+                balanced_accuracy_score(y_valid, prediction)
+            )
 
         best_idx = int(np.argmax(threshold_profits))
         profits.append(threshold_profits[best_idx])
@@ -256,7 +286,12 @@ def single_feature_ranking(
             print(f"Feature {feature_idx}, best score: {threshold_profits[best_idx]}")
 
     ranking = np.argsort(profits)[::-1]
-    return ranking, np.array(profits), np.array(accuracies), np.array(balanced_accuracies)
+    return (
+        ranking,
+        np.array(profits),
+        np.array(accuracies),
+        np.array(balanced_accuracies),
+    )
 
 
 def forward_selection(
@@ -288,4 +323,8 @@ def forward_selection(
         verbose=True,
     )
     selector.fit(X_train, y_train, X_valid, y_valid)
-    return selector.selected_features_, selector.best_threshold, selector.best_candidates
+    return (
+        selector.selected_features_,
+        selector.best_threshold,
+        selector.best_candidates,
+    )

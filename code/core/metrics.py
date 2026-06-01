@@ -28,7 +28,11 @@ def calculate_profit(
 
     tp = np.sum((y_pred == 1) & (y_true == 1))
     fp = np.sum((y_pred == 1) & (y_true == 0))
-    return float(TRUE_POSITIVE_REWARD * tp - FALSE_POSITIVE_COST * fp - VARIABLE_COST * num_variables)
+    return float(
+        TRUE_POSITIVE_REWARD * tp
+        - FALSE_POSITIVE_COST * fp
+        - VARIABLE_COST * num_variables
+    )
 
 
 def top_k_profit_curve(
@@ -57,7 +61,11 @@ def top_k_profit_curve(
     cumulative_tp = np.cumsum(y_sorted == 1)
     cumulative_fp = np.cumsum(y_sorted == 0)
     ks = np.arange(1, limit + 1)
-    profits = TRUE_POSITIVE_REWARD * cumulative_tp - FALSE_POSITIVE_COST * cumulative_fp - VARIABLE_COST * num_variables
+    profits = (
+        TRUE_POSITIVE_REWARD * cumulative_tp
+        - FALSE_POSITIVE_COST * cumulative_fp
+        - VARIABLE_COST * num_variables
+    )
     return ks, profits.astype(float)
 
 

@@ -118,8 +118,12 @@ def plot_profit_optimization_curve(
     profit_values = list(profit_values)
 
     plt.figure(figsize=(10, 6))
-    plt.plot(x_values, profit_values, marker="o", linestyle="-", linewidth=2, markersize=6)
-    plt.axvline(x=best_x, color="red", linestyle="--", linewidth=2, label=f"Best: {best_x}")
+    plt.plot(
+        x_values, profit_values, marker="o", linestyle="-", linewidth=2, markersize=6
+    )
+    plt.axvline(
+        x=best_x, color="red", linestyle="--", linewidth=2, label=f"Best: {best_x}"
+    )
 
     best_profit = max(profit_values)
     plt.axhline(

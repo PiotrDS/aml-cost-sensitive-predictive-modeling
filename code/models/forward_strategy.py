@@ -8,12 +8,12 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from core.metrics import optimize_top_k
+from core.reporting import StrategyResult, save_strategy_summary
 from sklearn.base import clone
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 
-from core.metrics import optimize_top_k
-from core.reporting import StrategyResult, save_strategy_summary
 from models.forward_selection import forward_selection
 
 RANDOM_STATE = 42
@@ -60,7 +60,9 @@ def _evaluate_holdout_profit(
 ) -> tuple[float, int]:
     """Compute top-K project profit for the selected features on the holdout set."""
     valid_probs = model.predict_proba(X_valid[selected_features])[:, 1]
-    return optimize_top_k(y_valid.values, valid_probs, len(selected_features), MAX_CLIENTS)
+    return optimize_top_k(
+        y_valid.values, valid_probs, len(selected_features), MAX_CLIENTS
+    )
 
 
 def run_forward(
@@ -108,7 +110,9 @@ def run_forward(
 
     validation_model = clone(base_model)
     validation_model.fit(X_tr[selected_features], y_tr)
-    holdout_profit, holdout_k = _evaluate_holdout_profit(validation_model, X_val, y_val, selected_features)
+    holdout_profit, holdout_k = _evaluate_holdout_profit(
+        validation_model, X_val, y_val, selected_features
+    )
     print(f"Holdout profit    : {holdout_profit:.1f} EUR")
     print(f"Holdout K         : {holdout_k} clients")
 
@@ -119,11 +123,16 @@ def run_forward(
     n_select = min(int(best_candidates), MAX_CLIENTS)
     top_indices = np.argsort(test_probs)[::-1][:n_select]
     cutoff_probability = float(test_probs[top_indices[-1]]) if len(top_indices) else 0.0
-    plot_path = _save_test_probability_plot(test_probs, cutoff_probability, n_select, output_dir)
+    plot_path = _save_test_probability_plot(
+        test_probs, cutoff_probability, n_select, output_dir
+    )
     print(f"Saved plot: {plot_path}")
 
     selected_clients = [int(index) + 1 for index in top_indices]
-    used_features = [_feature_to_submission_index(feature, X_train.columns) for feature in selected_features]
+    used_features = [
+        _feature_to_submission_index(feature, X_train.columns)
+        for feature in selected_features
+    ]
 
     print(f"\nSelected clients : {len(selected_clients)}")
     print(f"Used features    : {len(used_features)}")

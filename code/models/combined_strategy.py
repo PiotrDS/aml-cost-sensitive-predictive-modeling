@@ -24,13 +24,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import xgboost as xgb
+from core.reporting import StrategyResult, save_strategy_summary
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.feature_selection import mutual_info_classif
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import StandardScaler
-
-from core.reporting import StrategyResult, save_strategy_summary
 
 try:
     from models.forward_selection import forward_selection
@@ -83,7 +82,6 @@ def _as_numpy_y(y_train: pd.Series | np.ndarray) -> np.ndarray:
     return np.asarray(y_train).ravel()
 
 
-
 def _profit_curve_top_k(
     y_true: np.ndarray,
     probs: np.ndarray,
@@ -100,7 +98,6 @@ def _profit_curve_top_k(
     ks = np.arange(1, limit + 1)
     profits = cum_tp * 10 - cum_fp * 5 - n_vars * VARIABLE_COST
     return ks, profits.astype(float)
-
 
 
 def _optimize_top_k(
@@ -137,7 +134,6 @@ def _xgb_candidates(
     selected = importances.head(top_n)
 
     return selected.index.tolist(), selected.to_dict()
-
 
 
 def _lasso_candidates(
@@ -204,7 +200,9 @@ def _lasso_candidates(
     sweep_df = pd.DataFrame(sweep_rows)
     valid = sweep_df[sweep_df["avg_features"] > 0].copy()
     if valid.empty:
-        print("      WARNING: LASSO produced no active features. Skipping LASSO source.")
+        print(
+            "      WARNING: LASSO produced no active features. Skipping LASSO source."
+        )
         return [], {}, sweep_df
 
     best_C = float(valid.sort_values("cv_profit", ascending=False).iloc[0]["C"])
@@ -234,7 +232,6 @@ def _lasso_candidates(
     return coef.index.tolist(), coef.to_dict(), sweep_df
 
 
-
 def _forward_candidates(
     X_train: pd.DataFrame,
     y_train: pd.Series,
@@ -244,7 +241,9 @@ def _forward_candidates(
     print(f"[3/5] Forward-selection candidate search: keep up to {top_n}")
 
     if forward_selection is None:
-        print("      WARNING: models.forward_selection could not be imported. Skipping.")
+        print(
+            "      WARNING: models.forward_selection could not be imported. Skipping."
+        )
         return [], {}
 
     try:
@@ -279,7 +278,6 @@ def _forward_candidates(
         return [], {}
 
 
-
 def _normalize_scores(scores: dict[str, float]) -> dict[str, float]:
     """Scale source-specific scores to the [0, 1] range."""
     if not scores:
@@ -288,7 +286,6 @@ def _normalize_scores(scores: dict[str, float]) -> dict[str, float]:
     if max_abs == 0:
         return {k: 0.0 for k in scores}
     return {k: float(abs(v) / max_abs) for k, v in scores.items()}
-
 
 
 def _build_combined_candidate_pool(
@@ -304,7 +301,9 @@ def _build_combined_candidate_pool(
     for feature in all_features:
         sources = [src for src, feats in source_features.items() if feature in feats]
         agreement = len(sources)
-        strength = sum(norm_scores.get(src, {}).get(feature, 0.0) for src in source_features)
+        strength = sum(
+            norm_scores.get(src, {}).get(feature, 0.0) for src in source_features
+        )
 
         # Agreement is deliberately much more important than one strong ranking.
         combined_score = agreement * 100.0 + strength
@@ -436,7 +435,6 @@ def _evaluate_feature_set(
     )
 
 
-
 def _greedy_backward_pruning(
     X_train: pd.DataFrame,
     y_train: pd.Series,
@@ -554,7 +552,6 @@ def _predict_test_probs(
     return weight_xgb * probs_xgb + (1.0 - weight_xgb) * probs_logit
 
 
-
 def _feature_to_submission_index(feature: str, columns: Iterable[str]) -> int:
     """Convert V123 -> 123; otherwise use 1-based column position."""
     text = str(feature)
@@ -578,7 +575,6 @@ def _savefig(path: str) -> None:
     print(f"      Saved plot: {path}")
 
 
-
 def _plot_lasso_sweep(sweep_df: pd.DataFrame, output_dir: str) -> None:
     """Save the LASSO regularization sweep used during candidate generation."""
     if sweep_df.empty:
@@ -599,8 +595,9 @@ def _plot_lasso_sweep(sweep_df: pd.DataFrame, output_dir: str) -> None:
     _savefig(os.path.join(output_dir, "combined_lasso_sweep.png"))
 
 
-
-def _plot_feature_sources(pool_df: pd.DataFrame, selected_features: list[str], output_dir: str) -> None:
+def _plot_feature_sources(
+    pool_df: pd.DataFrame, selected_features: list[str], output_dir: str
+) -> None:
     """Save a bar chart showing agreement between feature-selection methods."""
     if pool_df.empty:
         return
@@ -616,7 +613,6 @@ def _plot_feature_sources(pool_df: pd.DataFrame, selected_features: list[str], o
     plt.xlim(0, 3.2)
     plt.grid(axis="x", linestyle="--", alpha=0.5)
     _savefig(os.path.join(output_dir, "combined_feature_source_agreement.png"))
-
 
 
 def _plot_model_comparison(rows: list[dict], output_dir: str) -> None:
@@ -637,7 +633,6 @@ def _plot_model_comparison(rows: list[dict], output_dir: str) -> None:
     _savefig(os.path.join(output_dir, "combined_model_comparison.png"))
 
 
-
 def _plot_pruning_history(history_df: pd.DataFrame, output_dir: str) -> None:
     """Save the backward-pruning profit history plot."""
     if history_df.empty:
@@ -653,19 +648,19 @@ def _plot_pruning_history(history_df: pd.DataFrame, output_dir: str) -> None:
     _savefig(os.path.join(output_dir, "combined_pruning_curve.png"))
 
 
-
 def _plot_topk_profit_curve(eval_result: EvaluationResult, output_dir: str) -> None:
     """Save the final top-K customer-contact profit curve."""
     plt.figure(figsize=(9, 5))
     plt.plot(eval_result.ks, eval_result.profits_by_k, linewidth=2)
-    plt.axvline(eval_result.best_k, linestyle="--", label=f"Best K={eval_result.best_k}")
+    plt.axvline(
+        eval_result.best_k, linestyle="--", label=f"Best K={eval_result.best_k}"
+    )
     plt.xlabel("Number of contacted customers K")
     plt.ylabel("OOF profit [EUR]")
     plt.title("Final model: profit curve over contacted customers")
     plt.legend()
     plt.grid(True, linestyle="--", alpha=0.5)
     _savefig(os.path.join(output_dir, "combined_topk_profit_curve.png"))
-
 
 
 def _plot_weight_sweep(eval_result: EvaluationResult, output_dir: str) -> None:
@@ -687,7 +682,6 @@ def _plot_weight_sweep(eval_result: EvaluationResult, output_dir: str) -> None:
     plt.legend()
     plt.grid(True, linestyle="--", alpha=0.5)
     _savefig(os.path.join(output_dir, "combined_weight_sweep.png"))
-
 
 
 def _plot_probability_distribution(
@@ -810,7 +804,9 @@ def run_combined(
     _plot_pruning_history(pruning_history, output_dir)
     _plot_topk_profit_curve(final_eval, output_dir)
     _plot_weight_sweep(final_eval, output_dir)
-    _plot_probability_distribution(_as_numpy_y(y_train), final_eval.best_probs, output_dir)
+    _plot_probability_distribution(
+        _as_numpy_y(y_train), final_eval.best_probs, output_dir
+    )
 
     # 4) Refit on full training data and predict test clients.
     print("[5/5] Final full-data training and test prediction")
@@ -826,8 +822,7 @@ def run_combined(
     top_indices = np.argsort(test_probs)[::-1][:n_select]
     selected_clients = [int(i) + 1 for i in top_indices]
     used_features = [
-        _feature_to_submission_index(f, X_train.columns)
-        for f in final_features
+        _feature_to_submission_index(f, X_train.columns) for f in final_features
     ]
 
     summary = pd.DataFrame(
