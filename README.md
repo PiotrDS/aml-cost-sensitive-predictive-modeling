@@ -6,52 +6,53 @@
 * [**Piotr Bartosiewicz**](https://github.com/PiotrDS)
 
 ## 📌 Project Overview
-This repository contains the solution for Project 2 of the Advanced Machine Learning course. 
-
-# TODO: Finish this chapter
+This repository contains the solution for Project 2 of the Advanced Machine Learning course. The objective of this project is to build a cost-sensitive predictive model to maximize expected profit by selecting optimal features and a subset of clients for a marketing campaign. We implemented multiple modeling strategies (XGBoost, Lasso, Forward Selection) and combined them to determine the strongest approach.
 
 ## 🗂 Repository Structure
-The project is structured into two main directories: `code/` and `report/`, adhering to the submission guidelines.
+The project is structured into several main directories:
 
-# TODO: Finish this chapter
-
-* `code/data/`: 
-* `code/src/`: Core Python modules.
-
-* `code/notebooks/`: Contains `demo.ipynb`, a Jupyter notebook for newcomers who do not know the project yet and want a guided way to run the pipeline on new data.
-* `code/main.py`: Main experiment runner (full experiment grid).
+* `code/`: Contains the source code of the project.
+  * `core/`: Core modules for data loading, metrics, plotting, reporting.
+  * `models/`: Implementations of different strategies (Forward Selection, Lasso, XGBoost, and Combined Strategy).
+  * `main.py`: Main script to run the models.
+* `data/`: Contains the training and testing datasets (`x_train.txt`, `y_train.txt`, `x_test.txt`).
+* `submission/`: Output directory containing results, logs, plots, summary CSVs, and selected variables/observations.
+* `run_all_models.sh`: Shell script to execute all strategies and generate a leaderboard.
 
 ## 🚀 How to Run the Code
 
 ### 1. Prerequisites
-Ensure you have Python 3.12 installed. It is recommended to use a virtual environment.
+Ensure you have Python 3.12 installed. The project uses `uv` for dependency management (recommended), but you can also use traditional `pip`.
 
 ```bash
-# Create and activate a virtual environment
+# Using uv (Recommended)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv sync
+
+# Or using plain pip
 python -m venv .venv
 source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
-
-# Install required dependencies
 pip install -r requirements.txt
 ```
 
-
 ### 2. Run all experiments
 
-From project root, run:
+To evaluate all models and create a leaderboard, run the utility script from the project root:
 
 ```bash
-python3 code/main.py
+./run_all_models.sh
 ```
 
-This runs the full grid defined in `code/main.py` (datasets, schemes, missing rates, seeds, and methods) and uses process-level parallelization by default.
+but you need to have x_test.txt, x_train.txt and y_train.txt in the `data/` folder.
 
-> Note: the current script does not expose CLI flags for partial runs. To change the scope, edit the `DEFAULT_*` constants in `code/main.py`.
+This script will ask for student IDs which are used to generate the final submission files, and then it runs the full experiment grid using `uv run`.
 
-### 3. Notebook quick start for new users
+### 3. Running a specific model
 
-If someone is new to this project and wants to quickly try our approach on new data, start with:
+If you prefer to run a single specific model, you can do so directly using the `code/main.py` script:
 
-- `code/notebooks/demo.ipynb`
+```bash
+uv run python code/main.py --model combined --student_ids "ID1_ID2_ID3"
+```
 
-The notebook is a guided entry point that explains the workflow step by step and is the easiest way to run and adapt the pipeline interactively.
+Available models are: `xgb`, `lasso`, `forward`, `combined`, `all`. The results, including models' logs, plots, and summary CSVs, are saved into the `submission/` folder.
